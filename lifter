@@ -1,2 +1,2 @@
 #!/bin/sh
-scala -cp target/classes com.wolfskeep.Lifter "$@"
+scala -cp target/classes:lib com.wolfskeep.Lifter "$@"

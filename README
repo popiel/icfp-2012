@@ -6,4 +6,18 @@ to the contest that I have.
 This is the first year that I'm doing the contest in what is arguably a
 functional languange; this year, I'm using Scala.  Huzzah!
 
+Random notes:
+* I'm using maven, just because I'm using it at work, and it's a convenient
+  way to make sure that all the dependent jars I feel like pulling in actually
+  end up in my submission image.  To compile from source, 'mvn compile'.
 
+* The very first significant decision I made was to do map updates in place,
+  to save on memory consumption and memory copies.  This does mean that for
+  backtracking, I'm going to have to replay move sequences... but I suspect
+  that will be less expensive in the long run than tons of memory copies.
+
+* The second significant decision was to express map update in terms of the
+  destination cells instead of the source cells.  In the process, I introduced
+  a new cell state for "a rock _was_ here just a moment ago", but eliminated
+  the need for a prior image of the map.  I have a second pass during update
+  to clean up the dust of moving rocks.
