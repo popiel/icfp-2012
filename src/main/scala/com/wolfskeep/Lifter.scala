@@ -271,12 +271,12 @@ class State(
         r += RIGHT
       }
       for (p <- pos until l by LEFT) {
-        if (maybePassable(mine(p + UP  )) && ramp(p + UP  ) > ramp(p) + 1) spread(p + UP  )
-        if (maybePassable(mine(p + DOWN)) && ramp(p + DOWN) > ramp(p) + 1) spread(p + DOWN)
+        if (maybePassable(mine(p + UP  )) && ramp(p + UP  ) > ramp(p) + 1) { ramp(p + UP  ) = ramp(p) + 1; spread(p + UP  ) }
+        if (maybePassable(mine(p + DOWN)) && ramp(p + DOWN) > ramp(p) + 1) { ramp(p + DOWN) = ramp(p) + 1; spread(p + DOWN) }
       }
       for (p <- pos until r by RIGHT) {
-        if (maybePassable(mine(p + UP  )) && ramp(p + UP  ) > ramp(p) + 1) spread(p + UP  )
-        if (maybePassable(mine(p + DOWN)) && ramp(p + DOWN) > ramp(p) + 1) spread(p + DOWN)
+        if (maybePassable(mine(p + UP  )) && ramp(p + UP  ) > ramp(p) + 1) { ramp(p + UP  ) = ramp(p) + 1; spread(p + UP  ) }
+        if (maybePassable(mine(p + DOWN)) && ramp(p + DOWN) > ramp(p) + 1) { ramp(p + DOWN) = ramp(p) + 1; spread(p + DOWN) }
       }
     }
     java.util.Arrays.fill(ramp, Integer.MAX_VALUE)
@@ -321,7 +321,7 @@ object Lifter {
     var state = startingState.copy
     var best = state.result
 
-    if (args(0) == "-run") {
+    if (args.size > 0 && args(0) == "-run") {
       for (arg <- args.tail) state.run(arg)
       entry = state.result.moveString
       println(state.toString)
