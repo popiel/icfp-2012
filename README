@@ -21,3 +21,19 @@ Random notes:
   a new cell state for "a rock _was_ here just a moment ago", but eliminated
   the need for a prior image of the map.  I have a second pass during update
   to clean up the dust of moving rocks.
+
+
+Fri Jul 13 06:30:00 PDT 2012
+This is about when I started.
+
+Fri Jul 13 14:00:00 PDT 2012
+This is about when I paused for lunch and a bit of TV.
+
+Fri Jul 13 15:30:00 PDT 2012
+About when I resumed to start the major refactor of State construction
+
+Fri Jul 13 17:39:45 PDT 2012
+Pausing to lie down for a bit.  Refactor complete, works as a scoring machine
+
+Fri Jul 13 18:58:05 PDT 2012
+Back.  Going to write some unit tests, of all things.

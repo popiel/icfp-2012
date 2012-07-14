@@ -14,21 +14,41 @@ import org.scalatest.junit.JUnitRunner
 import org.scalatest.Spec
 import org.scalatest.matchers.ShouldMatchers
 
+import scala.io.Source
+
 @RunWith(classOf[JUnitRunner])
-class MapSpec extends Spec with ShouldMatchers {
-
-  describe("A Map") {
-
-    it("should only contain keys and values that were added to it") {
-      Map("ho" -> 12) should (not contain key ("hi") and not contain value (13))
-      Map("hi" -> 13) should (contain key ("hi") and contain value (13))
+class StateSpec extends Spec with ShouldMatchers {
+  describe("A State") {
+    it("should be readable from a String") {
+      val input = """|R   L
+                     |#* *#
+                     |#* *#
+                     |#####""".stripMargin
+      val output = """|#######
+                      |#R   L#
+                      |##* *##
+                      |##* *##
+                      |#######
+                      |#######""".stripMargin
+      State(Source.fromString(input)).mineString should equal (output)
     }
 
-    it("should report its size as the number of key/value pairs it contains") {
-      Map() should have size (0)
-      Map("ho" -> 12) should have size (1)
-      Map("hi" -> 13, "ho" -> 12) should have size (2)
+    it("should merge some falling rocks") {
+      val input = """|R   L
+                     |#* *#
+                     |#* *#
+                     |#####""".stripMargin
+      val output = """|#######
+                      |#R   L#
+                      |##   ##
+                      |##***##
+                      |#######
+                      |#######""".stripMargin
+      val state = State(Source.fromString(input))
+      state.updateMine
+      state.mineString should equal (output)
     }
+
   }
 }
 

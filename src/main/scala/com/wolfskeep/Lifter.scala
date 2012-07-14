@@ -181,9 +181,12 @@ class State(
     }
   }
 
+  def mineString = {
+    mine.grouped(width).map(_.mkString).toList.reverse.mkString("\n")
+  }
+
   override def toString = {
-    mine.grouped(width).map(_.mkString).toList.reverse.mkString("\n") + "\n" +
-    outcome.getOrElse(EndGame(score, "unfinished", moves))
+    mineString + "\n" + outcome.getOrElse(EndGame(score, "unfinished", moves))
   }
 }
 
