@@ -83,6 +83,22 @@
             </configuration>
           </execution>
         </executions>
+            <configuration>
+                    <launchers>
+                        <launcher>
+                            <id>run-scalatest</id>
+                            <mainClass>org.scalatest.tools.Runner</mainClass>
+                            <args>
+                                <arg>-o</arg>
+                                <arg>-p</arg>
+                                <arg>${project.build.testOutputDirectory}</arg>
+                            </args>
+                            <jvmArgs>
+                                <jvmArg>-Xmx512m</jvmArg>
+                            </jvmArgs>
+                        </launcher>
+                    </launchers>
+            </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

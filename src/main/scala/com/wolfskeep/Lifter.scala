@@ -133,7 +133,7 @@ class State(
         checklist = List(rPos + DOWN + dir + dir + dir,
                          rPos + DOWN + dir + dir,
                          rPos + DOWN + dir,
-                         rPos) ++ unstable
+                         rPos) ++ checklist
         nextPos += dir
         cmd
       } else if (passable(replaced)) {
@@ -150,34 +150,36 @@ class State(
       }
     }
 
+    val midMine = (Map() ++ nextMine).withDefault(mine(_))
+
     var future: List[Int] = Nil
     var death: String = null
     for (pos <- checklist.sorted) {
-      if (mine(pos) == EMPTY) {
-        if (mine(pos + UP) == EMPTY) {
-          if (mine(pos + LEFT + UP) == ROCK &&
-              (mine(pos + LEFT) == ROCK || mine(pos + LEFT) == LAMBDA)) {
+      if (midMine(pos) == EMPTY) {
+        if (midMine(pos + UP) == EMPTY) {
+          if (midMine(pos + LEFT + UP) == ROCK &&
+              (midMine(pos + LEFT) == ROCK || midMine(pos + LEFT) == LAMBDA)) {
             nextMine += (pos) -> ROCK
             nextMine += (pos + LEFT + UP) -> EMPTY
             future = (pos + LEFT + UP) +: future
           }
-          if (mine(pos + RIGHT + UP) == ROCK && mine(pos + RIGHT) == ROCK &&
-              (mine(pos + RIGHT + RIGHT) != EMPTY || mine(pos + RIGHT + RIGHT + UP) != EMPTY)) {
+          if (midMine(pos + RIGHT + UP) == ROCK && midMine(pos + RIGHT) == ROCK &&
+              (midMine(pos + RIGHT + RIGHT) != EMPTY || midMine(pos + RIGHT + RIGHT + UP) != EMPTY)) {
             nextMine += (pos) -> ROCK
             nextMine += (pos + RIGHT + UP) -> EMPTY
             future = (pos + RIGHT + UP) +: future
           }
         }
-        if (mine(pos + UP) == ROCK) {
+        if (midMine(pos + UP) == ROCK) {
           nextMine += (pos) -> ROCK
           nextMine += (pos + UP) -> EMPTY
           future = (pos + UP) +: future
         }
-        if (mine(pos) == ROCK) {
-          if (mine(pos + DOWN) == EMPTY) {
+        if (nextMine.get(pos) == Some(ROCK)) {
+          if (midMine(pos + DOWN) == EMPTY) {
             future = (pos + DOWN) +: future
           }
-          if (mine(pos + DOWN) == ROBOT) {
+          if (midMine(pos + DOWN) == ROBOT) {
             death = "robot crushed"
           }
         }
@@ -188,7 +190,7 @@ class State(
       nextProof -= 1
       if (nextProof < 0) death = "robot drowned"
     }
-    return new State(base, nextMine.withDefault(mine), nextPos, future,
+    return new State(base, nextMine.withDefault(mine(_)), nextPos, future,
                      nextLevel,
                      if (waterCountdown <= 1) waterRate else waterCountdown - 1,
                      nextProof,
@@ -234,12 +236,14 @@ class State(
 
   def legalMoves = {
     var list: List[Char] = Nil
-    if (passable(mine(rPos + DOWN))) list = 'D' +: list
-    if (mine(rPos + RIGHT) == ROCK && mine(rPos + RIGHT * 2) == EMPTY) list = 'R' +: list
-    else if (passable(mine(rPos + RIGHT))) list = 'R' +: list
-    if (mine(rPos + LEFT ) == ROCK && mine(rPos + LEFT  * 2) == EMPTY) list = 'L' +: list
-    else if (passable(mine(rPos + LEFT))) list = 'L' +: list
-    if (passable(mine(rPos + UP))) list = 'U' +: list
+    if (outcome == null) {
+      if (passable(mine(rPos + DOWN))) list = 'D' +: list
+      if (mine(rPos + RIGHT) == ROCK && mine(rPos + RIGHT * 2) == EMPTY) list = 'R' +: list
+      else if (passable(mine(rPos + RIGHT))) list = 'R' +: list
+      if (mine(rPos + LEFT ) == ROCK && mine(rPos + LEFT  * 2) == EMPTY) list = 'L' +: list
+      else if (passable(mine(rPos + LEFT))) list = 'L' +: list
+      if (passable(mine(rPos + UP))) list = 'U' +: list
+    }
     list
   }
 
@@ -285,7 +289,7 @@ object Lifter {
       if (start.rPos == finish) return Some(start)
       val ramp = ramps(finish);
       implicit val order = new Ordering[State] {
-        def compare(x: State, y: State): Int = (ramp(x.rPos) - x.score) - (ramp(y.rPos) - y.score)
+        def compare(x: State, y: State): Int = (ramp(y.rPos) - y.score) - (ramp(x.rPos) - x.score)
       }
       val queue = new scala.collection.mutable.PriorityQueue
       queue += start
@@ -305,6 +309,7 @@ object Lifter {
         if (best.score < state.move('A').score) {
           best = state.move('A').result
           entry = best.moveString
+          println(state.move('A').toString)
         }
         next
       }
@@ -316,7 +321,7 @@ object Lifter {
         best = finish.move('A').result
         entry = best.moveString
       }
-      println(finish.toString)
+      println(finish.move('A').toString)
     }
 
     makeTraversal(lambdas)

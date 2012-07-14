@@ -18,6 +18,18 @@ import scala.io.Source
 
 @RunWith(classOf[JUnitRunner])
 class StateSpec extends Spec with ShouldMatchers {
+  describe("A PriorityQueue") {
+    it("should return the highest-value element") {
+      val queue = new scala.collection.mutable.PriorityQueue[Int]()
+      queue ++= List(3, 4, 1, 6, 7, 3)
+      queue.dequeue should equal (7)
+      queue.dequeue should equal (6)
+      queue.dequeue should equal (4)
+      queue.dequeue should equal (3)
+      queue.dequeue should equal (3)
+    }
+  }
+
   describe("A State") {
     it("should be readable from a String") {
       val input = """|R   L
@@ -47,10 +59,32 @@ class StateSpec extends Spec with ShouldMatchers {
       State(Source.fromString(input)).move('W').mineString should equal (output)
     }
 
+    it("should drop rocks on stupid people") {
+      val input = """|#*#
+                     |#R#
+                     |# #
+                     |###""".stripMargin
+      val output = """|#####
+                      |## ##
+                      |##*##
+                      |##R##
+                      |#####
+                      |#####""".stripMargin
+      val state = State(Source.fromString(input)).move('D')
+      state.mineString should equal (output)
+      state.outcome should equal ("robot crushed")
+    }
+
     it("should correctly score the best solution for map 1") {
       val state = State(Source.fromFile("maps/contest1.map")).run("LDRDDUULLLDDL")
       state.result.score should equal (212)
       state.result.moveString should equal ("LDRDDUULLLDDL")
+    }
+
+    it("should die for stupidity in map 1") {
+      val state = State(Source.fromFile("maps/contest1.map")).run("DD")
+      state.result.score should equal (-2)
+      state.result.outcome should equal ("robot crushed")
     }
 
 /*
