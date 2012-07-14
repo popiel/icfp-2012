@@ -66,3 +66,20 @@ Done putting Melissa to bed.  Resuming coding.
 Sat Jul 14 09:07:20 PDT 2012
 Woohoo! Undo works.
 
+Sat Jul 14 10:45:32 PDT 2012
+Pathing is getting there, but throwing stack overflows in findPath
+
+Sat Jul 14 11:02:05 PDT 2012
+Pathing is still throwing stack overflow, but I just got a vision on how to
+rework state management to get rid of the side effects, and without consuming
+millions of megabytes for large maps.  Need to think about how to best handle
+this.  Is the rewrite worth it?
+
+Sat Jul 14 12:51:43 PDT 2012
+Rewrite mostly done.  Pausing to feed cats and eat lunch.
+
+Sat Jul 14 13:21:55 PDT 2012
+Resuming work on rewrite.
+
+Sat Jul 14 14:33:32 PDT 2012
+Immutable state seems to work.
