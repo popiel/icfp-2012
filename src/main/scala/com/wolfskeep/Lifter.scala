@@ -121,6 +121,9 @@ class State(
       mine(rPos) = EMPTY
       unstable = rPos +: unstable
       rPos += dir
+      if (rPos > waterLevel * width) {
+        proofCountdown = proofTurns
+      }
     }
     return None
   }
