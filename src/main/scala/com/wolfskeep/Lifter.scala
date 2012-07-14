@@ -243,17 +243,15 @@ class State(
     list
   }
 
-/*
-  def findPath(pos: Int, ramp: Array[Int]): Boolean = {
+  def findPath(pos: Int, ramp: Array[Int]): Option[State] = {
+    if (rPos == pos) return Some(this)
     val moves = legalMoves.sortBy(cmd => ramp(rPos + dirMap(cmd)))
-    moves.exists { cmd =>
-      move(cmd)
-      if (rPos == pos) true
-      else if (findPath(pos, ramp)) true
-      else { undo; false }
-    }
+    
+    (Option[State](null) /: moves) { (b,c) => b orElse {
+      val next = move(c)
+      if (next.rPos == pos) Some(next) else next.findPath(pos, ramp)
+    } }
   }
-*/
 }
 
 object Lifter {
@@ -282,35 +280,46 @@ object Lifter {
     }
 
     val lambdas = (startingState.base.LL until startingState.base.UR).filter(pos => startingState.base.original(pos) == LAMBDA)
-    // val ramps = lambdas.zip(lambdas.map(pos => state.makeRamp(pos))).toMap
-/*
+
+    def findPath(start: State, finish: Int): Option[State] = {
+      if (start.rPos == finish) return Some(start)
+      val ramp = ramps(finish);
+      implicit val order = new Ordering[State] {
+        def compare(x: State, y: State): Int = (ramp(x.rPos) - x.score) - (ramp(y.rPos) - y.score)
+      }
+      val queue = new scala.collection.mutable.PriorityQueue
+      queue += start
+      while (!queue.isEmpty) {
+        val state = queue.dequeue()
+        val children = state.legalMoves.map(state.move(_))
+        val win = children.find(_.rPos == finish)
+        if (!win.isEmpty) return win
+        queue ++= children
+      }
+      None
+    }
+
     def makeTraversal(lambdas: Seq[Int]) {
-      val state = startingState
-      for (target <- lambdas) {
-        state.findPath(target, ramps(target))
-        if (best.score < state.peak.score) {
-          best = state.peak
+      val state = (startingState /: lambdas) { (state, target) =>
+        val next = findPath(state, target).getOrElse(state)
+        if (best.score < state.move('A').score) {
+          best = state.move('A').result
           entry = best.moveString
         }
+        next
       }
-      if (state.collected == state.totalLambdas) {
-        val target = state.mine.indexOf(LIFT)
-        state.findPath(target, ramps(target))
-      }
-      if (best.score < state.peak.score) {
-        best = state.peak
+      val finish = if (state.collected == state.base.totalLambdas) {
+        val target = state.base.original.indexOf(LIFT)
+        findPath(state, target).getOrElse(state)
+      } else state
+      if (best.score < finish.move('A').score) {
+        best = finish.move('A').result
         entry = best.moveString
       }
+      println(finish.toString)
     }
 
     makeTraversal(lambdas)
-    if (best.score < state.result.score) {
-      best = state.result
-      entry = best.moveString
-    }
-
-    println(state.toString)
-*/
   }
 }
 
