@@ -20,7 +20,16 @@ package wolfskeep {
 import scala.io._
 import scala.collection.mutable.ListBuffer
 
-case class Undo(cmd: Char, replaced: Char, wasSpace: List[Int], wasRock: List[Int], oldUnstable: List[Int])
+case class Undo(
+  cmd: Char,
+  replaced: Char,
+  wasSpace: List[Int],
+  wasRock: List[Int],
+  oldUnstable: List[Int],
+  waterLevel: Int,
+  waterCountdown: Int,
+  proofCountdown: Int
+)
 
 case class EndGame(score: Int, outcome: String, path: List[Undo]) {
   def moveString = {
@@ -111,7 +120,7 @@ class State(
 
   def move(cmd: Char): Option[EndGame] = outcome orElse {
     if (cmd == 'A') {
-      moves = Undo(cmd, ROBOT, Nil, Nil, unstable) +: moves
+      moves = Undo(cmd, ROBOT, Nil, Nil, unstable, waterLevel, waterCountdown, proofCountdown) +: moves
       return endGame(score + 25 * collected, "Abort")
     }
     score -= 1
@@ -119,7 +128,7 @@ class State(
     val replaced = mine(rPos + dir)
     if (replaced == LIFT && collected == totalLambdas) {
       rPos += dir
-      moves = Undo(cmd, replaced, Nil, Nil, unstable) +: moves
+      moves = Undo(cmd, replaced, Nil, Nil, unstable, waterLevel, waterCountdown, proofCountdown) +: moves
       return endGame(score + 50 * collected, "Completed")
     }
     if (replaced == LAMBDA) { collected += 1; score += 25 }
@@ -190,7 +199,7 @@ class State(
         }
       }
     }
-    moves = Undo(realCmd, replaced, wasSpace, wasRock, oldUnstable) +: moves
+    moves = Undo(realCmd, replaced, wasSpace, wasRock, oldUnstable, waterLevel, waterCountdown, proofCountdown) +: moves
     unstable = cleanup.toList
     for (pos <- unstable) {
       mine(pos) = EMPTY
@@ -220,6 +229,9 @@ class State(
     mine(rPos) = ROBOT
     if (m.replaced == LAMBDA) { collected -= 1; score -= 25 }
     if (m.cmd != 'A') score += 1
+    waterLevel = m.waterLevel
+    waterCountdown = m.waterCountdown
+    proofCountdown = m.proofCountdown
     outcome = None
   }
 
