@@ -10,6 +10,9 @@ package object wolfskeep {
   val EARTH = '.'
   val EMPTY = ' '
   val DUST = '^'
+
+  def passable     (cell: Char) = (cell == EMPTY || cell == EARTH || cell == LAMBDA)
+  def maybePassable(cell: Char) = (cell == EMPTY || cell == EARTH || cell == LAMBDA || cell == ROCK)
 }
 
 package wolfskeep {
@@ -38,11 +41,6 @@ object State {
     val width = lines.map(_.length).max + 2
     val height = lines.size + 2
     val padded = ("#" * width) + lines.map{(s) => String.format("#%-"+(width - 2)+"s#", s)}.mkString("") + ("#" * width)
-
-    def LEFT = -1
-    def RIGHT = 1
-    def UP = width
-    def DOWN = -width
 
     val mine = padded.toCharArray
 
@@ -82,9 +80,14 @@ class State(
   def UP = width
   def DOWN = -width
 
+  def dirs = List(UP, LEFT, RIGHT, DOWN)
+
+  def LL = width + 1;
+  def UR = width * height - width - 1;
+
   def findUnstable: List[Int] = {
     val builder = new ListBuffer[Int]
-    for (pos <- (UP + RIGHT) until (width * height + DOWN + LEFT)) {
+    for (pos <- LL until UR) {
       if (mine(pos) == EMPTY &&
           (mine(pos + UP) == ROCK ||
            (mine(pos + UP) == EMPTY && (mine(pos + UP + LEFT) == ROCK || mine(pos + UP + RIGHT) == ROCK))))
@@ -94,8 +97,6 @@ class State(
   }
 
   def endGame(finalScore: Int, how: String) = { outcome = Some(EndGame(finalScore, how, moves)); outcome }
-
-  def passable(cell: Char) = (cell == EMPTY || cell == EARTH || cell == LAMBDA)
 
   val dirMap = Map('L' -> LEFT, 'R' -> RIGHT, 'U' -> UP, 'D' -> DOWN, 'W' -> 0)
 
@@ -181,27 +182,80 @@ class State(
     }
   }
 
-  def mineString = {
-    mine.grouped(width).map(_.mkString).toList.reverse.mkString("\n")
-  }
+  def mineString = mine.grouped(width).map(_.mkString).toList.reverse.mkString("\n")
 
-  override def toString = {
-    mineString + "\n" + outcome.getOrElse(EndGame(score, "unfinished", moves))
+  def result = outcome.getOrElse(EndGame(score, "unfinished", moves))
+
+  override def toString = mineString + "\n" + result
+
+  def makeRamp(pos: Int, ramp: Array[Int] = new Array[Int](width * height)): Array[Int] = {
+    def spread(pos: Int) {
+      var l = pos + LEFT
+      while (maybePassable(mine(l)) && ramp(l) > ramp(l - LEFT) + 1) {
+        ramp(l) = ramp(l - LEFT) + 1
+        l += LEFT
+      }
+      var r = pos + RIGHT
+      while (maybePassable(mine(r)) && ramp(r) > ramp(r - RIGHT) + 1) {
+        ramp(r) = ramp(r - RIGHT) + 1
+        r += RIGHT
+      }
+      for (p <- pos until l by LEFT) {
+        if (maybePassable(mine(p + UP  )) && ramp(p + UP  ) > ramp(p) + 1) spread(p + UP  )
+        if (maybePassable(mine(p + DOWN)) && ramp(p + DOWN) > ramp(p) + 1) spread(p + DOWN)
+      }
+      for (p <- pos until r by RIGHT) {
+        if (maybePassable(mine(p + UP  )) && ramp(p + UP  ) > ramp(p) + 1) spread(p + UP  )
+        if (maybePassable(mine(p + DOWN)) && ramp(p + DOWN) > ramp(p) + 1) spread(p + DOWN)
+      }
+    }
+    java.util.Arrays.fill(ramp, Integer.MAX_VALUE)
+    ramp(pos) = 0
+    spread(pos)
+    ramp
   }
 }
 
 object Lifter {
 
-  @volatile var entry: String = "A"
+  @volatile var entry: String = ""
 
   def main(args : Array[String]) {
+    // First, set up our time limits
     Runtime.getRuntime.addShutdownHook(new Thread { override def run { println(entry.toString) }})
+    (new Thread { override def run { Thread.sleep(170000); System.exit(1) } }).start
 
     val startingState = State(Source.stdin)
     var state = startingState
+    var best = state.result
 
-    for (arg <- args) state.run(arg)
-    entry = state.moves.reverse.mkString
+    if (args(0) == "-run") {
+      for (arg <- args.tail) state.run(arg)
+      entry = state.moves.reverse.mkString
+      println(state.toString)
+      return
+    }
+
+    val ramps = new collection.mutable.HashMap[Int, Array[Int]] {
+      override def default(pos: Int): Array[Int] = { val ramp = state.makeRamp(pos); put(pos, ramp); ramp }
+    }
+
+    val lambdas = (state.LL until state.UR).filter(pos => state.mine(pos) == LAMBDA)
+    // val ramps = lambdas.zip(lambdas.map(pos => state.makeRamp(pos))).toMap
+
+    def makeTraversal(lambdas: Seq[Int]) {
+    }
+
+    def makePath(pos: Int) {
+      val ramp = ramps(pos)
+      val moves = state.dirs.filter(dir => maybePassable(state.mine(pos + dir))).sortBy(dir => ramp(pos + dir))
+    }
+
+    makeTraversal(lambdas)
+    if (best.score < state.result.score) {
+      best = state.result
+      entry = best.path.reverse.mkString
+    }
 
     println(state.toString)
   }

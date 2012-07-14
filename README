@@ -43,3 +43,15 @@ Just had a 5 second or so power outage.  Thundering outside.
 This may be a problem.
 
 Thank goodness for UPSes.
+
+Fri Jul 13 20:44:37 PDT 2012
+From chat:
+(8:02:21 PM) ems_: mietek: my reading is that if the robot leaves the water, but the rising water covers the robot again in the map update, then this does not reset the waterproofing. However, I haven't tested against the validator.
+(8:03:00 PM) Patcdr: I have tested it, and the counter is reset
+
+I'm going to have to fix that... my code currently works like mietak expected.
+
+Fri Jul 13 20:45:29 PDT 2012
+My ramp-making code seems to be in place, will help with path-finding.
+
+
