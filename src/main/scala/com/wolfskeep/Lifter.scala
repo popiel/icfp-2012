@@ -226,7 +226,9 @@ object Lifter {
   def main(args : Array[String]) {
     // First, set up our time limits
     Runtime.getRuntime.addShutdownHook(new Thread { override def run { println(entry.toString) }})
-    (new Thread { override def run { Thread.sleep(170000); System.exit(1) } }).start
+    val alarm = new Thread { override def run { Thread.sleep(170000); System.exit(1) } }
+    alarm.setDaemon(true)
+    alarm.start
 
     val startingState = State(Source.stdin)
     var state = startingState
