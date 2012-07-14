@@ -179,6 +179,12 @@ class State(
           if (midMine(pos + DOWN) == EMPTY) {
             future = (pos + DOWN) +: future
           }
+          if (midMine(pos + DOWN + LEFT) == EMPTY) {
+            future = (pos + DOWN + LEFT) +: future
+          }
+          if (midMine(pos + DOWN + RIGHT) == EMPTY) {
+            future = (pos + DOWN + RIGHT) +: future
+          }
           if (midMine(pos + DOWN) == ROBOT) {
             death = "robot crushed"
           }

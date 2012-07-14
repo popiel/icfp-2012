@@ -87,6 +87,12 @@ class StateSpec extends Spec with ShouldMatchers {
       state.result.outcome should equal ("robot crushed")
     }
 
+    it("should move boulders correctly in map 1") {
+      val state = State(Source.fromFile("maps/contest1.map")).run("DLRDD")
+      state.result.score should equal (45)
+      state.result.outcome should equal ("unfinished")
+    }
+
 /*
     it("should correctly undo a long sequence") {
       val state = State(Source.fromFile("maps/contest1.map"))
