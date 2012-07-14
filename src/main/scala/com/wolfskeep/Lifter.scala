@@ -38,6 +38,7 @@ case class EndGame(score: Int, outcome: String, path: List[Undo]) {
       if (c == '<') 'L' else if (c == '>') 'R' else c
     }.reverse.mkString
   }
+  override def toString = "Score: " + score + ": " + outcome + ": " + moveString
 }
 
 object State {
@@ -92,6 +93,7 @@ class State(
   if (unstable == null) unstable = findUnstable
 
   var outcome: Option[EndGame] = None
+  var peak: EndGame = EndGame(0, "start", Nil)
 
   def LEFT = -1
   def RIGHT = 1
@@ -114,7 +116,11 @@ class State(
     builder.toList
   }
 
-  def endGame(finalScore: Int, how: String) = { outcome = Some(EndGame(finalScore, how, moves)); outcome }
+  def endGame(finalScore: Int, how: String) = {
+    outcome = Some(EndGame(finalScore, how, moves))
+    if (peak.score < finalScore) peak = outcome.get
+    outcome
+  }
 
   val dirMap = Map('L' -> LEFT, 'R' -> RIGHT, 'U' -> UP, 'D' -> DOWN, 'W' -> 0, '<' -> LEFT, '>' -> RIGHT)
 
@@ -131,7 +137,11 @@ class State(
       moves = Undo(cmd, replaced, Nil, Nil, unstable, waterLevel, waterCountdown, proofCountdown) +: moves
       return endGame(score + 50 * collected, "Completed")
     }
-    if (replaced == LAMBDA) { collected += 1; score += 25 }
+    if (replaced == LAMBDA) {
+      collected += 1
+      score += 25
+      if (peak.score < score + 25 * collected) peak = EndGame(score + 25 * collected, "Abort", moves)
+    }
     val oldUnstable = unstable
     var wasSpace: List[Int] = Nil
     var wasRock:  List[Int] = Nil
@@ -275,12 +285,24 @@ class State(
     ramp
   }
 
-  def findPath(pos: Int): State = {
-    // val moves = dirs.filter(dir => maybePassable(mine(pos + dir))).sortBy(dir => ramp(pos + dir))
-    // move(cmdMap(moves(0)))
-    // if (rPos == pos) return this
-    // undo
-    this
+  def legalMoves = {
+    var list: List[Char] = Nil
+    if (passable(mine(rPos + DOWN))) list = 'D' +: list
+    if (mine(rPos + RIGHT) == ROCK && mine(rPos + RIGHT * 2) == EMPTY) list = 'R' +: list
+    else if (passable(mine(rPos + RIGHT))) list = 'R' +: list
+    if (mine(rPos + LEFT ) == ROCK && mine(rPos + LEFT  * 2) == EMPTY) list = 'L' +: list
+    else if (passable(mine(rPos + LEFT))) list = 'L' +: list
+    if (passable(mine(rPos + UP))) list = 'U' +: list
+    list
+  }
+
+  def findPath(pos: Int, ramp: Array[Int]): Option[State] = {
+    val moves = legalMoves.sortBy(cmd => ramp(rPos + dirMap(cmd)))
+    (None.asInstanceOf[Option[State]] /: moves) { (base, cmd) => base orElse {
+      move(cmd)
+      if (rPos == pos) Some(this)
+      else findPath(pos, ramp) orElse { undo; None }
+    } }
   }
 }
 
@@ -296,7 +318,7 @@ object Lifter {
     alarm.start
 
     val startingState = State(Source.stdin)
-    var state = startingState
+    var state = startingState.copy
     var best = state.result
 
     if (args(0) == "-run") {
@@ -314,11 +336,22 @@ object Lifter {
     // val ramps = lambdas.zip(lambdas.map(pos => state.makeRamp(pos))).toMap
 
     def makeTraversal(lambdas: Seq[Int]) {
-    }
-
-    def makePath(pos: Int) {
-      val ramp = ramps(pos)
-      val moves = state.dirs.filter(dir => maybePassable(state.mine(pos + dir))).sortBy(dir => ramp(pos + dir))
+      state = startingState.copy
+      for (target <- lambdas) {
+        state.findPath(target, ramps(target))
+        if (best.score < state.peak.score) {
+          best = state.peak
+          entry = best.moveString
+        }
+      }
+      if (state.collected == state.totalLambdas) {
+        val target = state.mine.indexOf(LIFT)
+        state.findPath(target, ramps(target))
+      }
+      if (best.score < state.peak.score) {
+        best = state.peak
+        entry = best.moveString
+      }
     }
 
     makeTraversal(lambdas)
