@@ -20,7 +20,16 @@ package wolfskeep {
 import scala.io._
 import scala.collection.mutable.ListBuffer
 
-case class EndGame(score: Int, outcome: String, path: List[Char])
+case class Undo(cmd: Char, replaced: Char, wasSpace: List[Int], wasRock: List[Int], oldUnstable: List[Int])
+
+case class EndGame(score: Int, outcome: String, path: List[Undo]) {
+  def moveString = {
+    path.map { u: Undo =>
+      val c = u.cmd;
+      if (c == '<') 'L' else if (c == '>') 'R' else c
+    }.reverse.mkString
+  }
+}
 
 object State {
   def apply(original: State): State = original.copy
@@ -66,7 +75,7 @@ class State(
   var waterCountdown: Int = 0,
   var proofTurns: Int = 10,
   var proofCountdown: Int = 10,
-  var moves: List[Char] = List.empty
+  var moves: List[Undo] = List.empty
 ) {
   def copy = new State(width, height, mine.clone, rPos, unstable, score, collected, totalLambdas, waterLevel, waterRate, waterCountdown, proofTurns, proofCountdown, moves)
 
@@ -98,38 +107,53 @@ class State(
 
   def endGame(finalScore: Int, how: String) = { outcome = Some(EndGame(finalScore, how, moves)); outcome }
 
-  val dirMap = Map('L' -> LEFT, 'R' -> RIGHT, 'U' -> UP, 'D' -> DOWN, 'W' -> 0)
+  val dirMap = Map('L' -> LEFT, 'R' -> RIGHT, 'U' -> UP, 'D' -> DOWN, 'W' -> 0, '<' -> LEFT, '>' -> RIGHT)
 
   def move(cmd: Char): Option[EndGame] = outcome orElse {
-    moves = cmd +: moves
-    if (cmd == 'A') return endGame(score + 25 * collected, "Abort")
+    if (cmd == 'A') {
+      moves = Undo(cmd, ROBOT, Nil, Nil, unstable) +: moves
+      return endGame(score + 25 * collected, "Abort")
+    }
     score -= 1
     val dir = dirMap(cmd)
-    if (mine(rPos + dir) == LIFT && collected == totalLambdas) return endGame(score + 50 * collected, "Completed")
-    if (mine(rPos + dir) == LAMBDA) { collected += 1; score += 25 }
-    if (cmd == 'L' || cmd == 'R') {
-      if (mine(rPos + dir) == ROCK && mine(rPos + dir + dir) == EMPTY) {
+    val replaced = mine(rPos + dir)
+    if (replaced == LIFT && collected == totalLambdas) {
+      rPos += dir
+      moves = Undo(cmd, replaced, Nil, Nil, unstable) +: moves
+      return endGame(score + 50 * collected, "Completed")
+    }
+    if (replaced == LAMBDA) { collected += 1; score += 25 }
+    val oldUnstable = unstable
+    var wasSpace: List[Int] = Nil
+    var wasRock:  List[Int] = Nil
+    val realCmd = {
+      if ((cmd == 'L' || cmd == 'R') && replaced == ROCK && mine(rPos + dir + dir) == EMPTY) {
         mine(rPos + dir + dir) = ROCK
-        mine(rPos + dir) = EMPTY
+        mine(rPos + dir) = ROBOT
+        mine(rPos) = EMPTY
         unstable = List(rPos + DOWN + dir + dir + dir,
                         rPos + DOWN + dir + dir,
-                        rPos + DOWN + dir) ++ unstable
+                        rPos + DOWN + dir,
+                        rPos) ++ unstable
+        rPos += dir
+        wasSpace = (rPos + dir) +: wasSpace
+        if (cmd == 'L') '<' else '>'
+      } else if (passable(replaced)) {
+        mine(rPos + dir) = ROBOT
+        mine(rPos) = EMPTY
+        unstable = rPos +: unstable
+        rPos += dir
+        if (rPos > waterLevel * width) {
+          proofCountdown = proofTurns
+        }
+        cmd
+      } else {
+        'W'
       }
     }
-    if (passable(mine(rPos + dir))) {
-      mine(rPos + dir) = ROBOT
-      mine(rPos) = EMPTY
-      unstable = rPos +: unstable
-      rPos += dir
-      if (rPos > waterLevel * width) {
-        proofCountdown = proofTurns
-      }
-    }
-    return None
-  }
 
-  def updateMine: Option[EndGame] = outcome orElse {
     val cleanup = new ListBuffer[Int]
+    var crushed = false
     for (pos <- unstable.sorted) {
       if (mine(pos) == EMPTY) {
         if (mine(pos + UP) == EMPTY) {
@@ -138,6 +162,7 @@ class State(
             mine(pos) = ROCK
             mine(pos + LEFT + UP) = DUST
             cleanup += (pos + LEFT + UP)
+            wasRock = (pos + LEFT + UP) +: wasRock
           }
           if (mine(pos + RIGHT + UP) == ROCK &&
               (mine(pos + RIGHT) == DUST || mine(pos + RIGHT) == ROCK) &&
@@ -145,27 +170,32 @@ class State(
             mine(pos) = ROCK
             mine(pos + RIGHT + UP) = DUST
             cleanup += (pos + RIGHT + UP)
+            wasRock = (pos + RIGHT + UP) +: wasRock
           }
         }
         if (mine(pos + UP) == ROCK) {
           mine(pos) = ROCK
           mine(pos + UP) = DUST
           cleanup += (pos + UP)
+          wasRock = (pos + UP) +: wasRock
         }
         if (mine(pos) == ROCK) {
+          wasSpace = pos +: wasSpace
           if (mine(pos + DOWN) == EMPTY) {
             cleanup += (pos + DOWN)
           }
           if (mine(pos + DOWN) == ROBOT) {
-            return endGame(score, "Robot crushed")
+            crushed = true
           }
         }
       }
     }
+    moves = Undo(realCmd, replaced, wasSpace, wasRock, oldUnstable) +: moves
     unstable = cleanup.toList
     for (pos <- unstable) {
       mine(pos) = EMPTY
     }
+    if (crushed) return endGame(score, "Robot crushed")
     if (waterRate > 0) {
       waterCountdown -= 1
       if (waterCountdown <= 0) { waterLevel += 1 ; waterCountdown = waterRate }
@@ -179,17 +209,32 @@ class State(
     return None
   }
 
-  def run(cmds: String): Option[EndGame] = {
-    (None.asInstanceOf[Option[EndGame]] /: (cmds :+ 'A').filter(cmd => "LRUDWA".contains(cmd))) { (base, cmd) =>
-      base.orElse(move(cmd)).orElse(updateMine)
-    }
+  def undo {
+    if (moves.isEmpty) return
+    val m = moves.head
+    moves = moves.tail
+    for (pos <- m.wasRock)  mine(pos) = ROCK
+    for (pos <- m.wasSpace) mine(pos) = EMPTY
+    mine(rPos) = m.replaced
+    rPos -= dirMap(m.cmd)
+    mine(rPos) = ROBOT
+    if (m.replaced == LAMBDA) { collected -= 1; score -= 25 }
+    if (m.cmd != 'A') score += 1
+    outcome = None
+  }
+
+  def run(cmds: String) {
+    for {
+      cmd <- (cmds :+ 'A')
+      if "LRUDWA".contains(cmd)
+    } move(cmd)
   }
 
   def mineString = mine.grouped(width).map(_.mkString).toList.reverse.mkString("\n")
 
   def result = outcome.getOrElse(EndGame(score, "unfinished", moves))
 
-  override def toString = mineString + "\n" + result
+  override def toString = (mineString + "\n" + result).toLowerCase
 
   def makeRamp(pos: Int, ramp: Array[Int] = new Array[Int](width * height)): Array[Int] = {
     def spread(pos: Int) {
@@ -217,6 +262,14 @@ class State(
     spread(pos)
     ramp
   }
+
+  def findPath(pos: Int): State = {
+    // val moves = dirs.filter(dir => maybePassable(mine(pos + dir))).sortBy(dir => ramp(pos + dir))
+    // move(cmdMap(moves(0)))
+    // if (rPos == pos) return this
+    // undo
+    this
+  }
 }
 
 object Lifter {
@@ -236,7 +289,7 @@ object Lifter {
 
     if (args(0) == "-run") {
       for (arg <- args.tail) state.run(arg)
-      entry = state.moves.reverse.mkString
+      entry = state.result.moveString
       println(state.toString)
       return
     }
@@ -259,7 +312,7 @@ object Lifter {
     makeTraversal(lambdas)
     if (best.score < state.result.score) {
       best = state.result
-      entry = best.path.reverse.mkString
+      entry = best.moveString
     }
 
     println(state.toString)

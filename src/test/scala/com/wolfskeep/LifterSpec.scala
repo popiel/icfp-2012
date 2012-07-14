@@ -45,10 +45,26 @@ class StateSpec extends Spec with ShouldMatchers {
                       |#######
                       |#######""".stripMargin
       val state = State(Source.fromString(input))
-      state.updateMine
+      state.move('W')
       state.mineString should equal (output)
     }
 
+    it("should correctly score the best solution for map 1") {
+      val state = State(Source.fromFile("maps/contest1.map"))
+      state.run("LDRDDUULLLDDL")
+      state.result.score should equal (212)
+      state.result.moveString should equal ("LDRDDUULLLDDL")
+    }
+
+    it("should correctly undo a long sequence") {
+      val state = State(Source.fromFile("maps/contest1.map"))
+      val original = state.mineString
+      state.run("LDRDDUULLLDDL")
+      while (!state.moves.isEmpty) state.undo
+      state.mineString should equal (original)
+      state.score should equal (0)
+      state.collected should equal (0)
+    }
   }
 }
 
