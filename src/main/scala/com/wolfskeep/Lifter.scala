@@ -11,7 +11,7 @@ package object wolfskeep {
   val EMPTY = ' '
 
   def passable     (cell: Char) = (cell == EMPTY || cell == EARTH || cell == LAMBDA)
-  def maybePassable(cell: Char) = (cell == EMPTY || cell == EARTH || cell == LAMBDA || cell == ROCK)
+  def maybePassable(cell: Char) = (cell == EMPTY || cell == EARTH || cell == LAMBDA || cell == ROCK || cell == ROBOT)
 }
 
 package wolfskeep {
@@ -76,23 +76,31 @@ class BaseState(
 
   def makeRamp(pos: Int, ramp: Array[Int] = new Array[Int](width * height)): Array[Int] = {
     def spread(pos: Int) {
+      var v = ramp(pos) + 1
       var l = pos + LEFT
-      while (maybePassable(original(l)) && ramp(l) > ramp(l - LEFT) + 1) {
-        ramp(l) = ramp(l - LEFT) + 1
+      while (maybePassable(original(l)) && ramp(l) > v) {
+        ramp(l) = v
         l += LEFT
+        v += 1
       }
+      v = ramp(pos) + 1
       var r = pos + RIGHT
-      while (maybePassable(original(r)) && ramp(r) > ramp(r - RIGHT) + 1) {
-        ramp(r) = ramp(r - RIGHT) + 1
+      while (maybePassable(original(r)) && ramp(r) > v) {
+        ramp(r) = v
         r += RIGHT
+        v += 1
       }
+      v = ramp(pos) + 1
       for (p <- pos until l by LEFT) {
-        if (maybePassable(original(p + UP  )) && ramp(p + UP  ) > ramp(p) + 1) { ramp(p + UP  ) = ramp(p) + 1; spread(p + UP  ) }
-        if (maybePassable(original(p + DOWN)) && ramp(p + DOWN) > ramp(p) + 1) { ramp(p + DOWN) = ramp(p) + 1; spread(p + DOWN) }
+        if (maybePassable(original(p + UP  )) && ramp(p + UP  ) > v) { ramp(p + UP  ) = v; spread(p + UP  ) }
+        if (maybePassable(original(p + DOWN)) && ramp(p + DOWN) > v) { ramp(p + DOWN) = v; spread(p + DOWN) }
+        v += 1
       }
+      v = ramp(pos) + 1
       for (p <- pos until r by RIGHT) {
-        if (maybePassable(original(p + UP  )) && ramp(p + UP  ) > ramp(p) + 1) { ramp(p + UP  ) = ramp(p) + 1; spread(p + UP  ) }
-        if (maybePassable(original(p + DOWN)) && ramp(p + DOWN) > ramp(p) + 1) { ramp(p + DOWN) = ramp(p) + 1; spread(p + DOWN) }
+        if (maybePassable(original(p + UP  )) && ramp(p + UP  ) > v) { ramp(p + UP  ) = v; spread(p + UP  ) }
+        if (maybePassable(original(p + DOWN)) && ramp(p + DOWN) > v) { ramp(p + DOWN) = v; spread(p + DOWN) }
+        v += 1
       }
     }
     java.util.Arrays.fill(ramp, Integer.MAX_VALUE)
@@ -261,13 +269,6 @@ class State(
                          if (waterCountdown <= 1) waterRate else waterCountdown - 1,
                          nextProof, realCmd +: moves, nextScore, nextCollected, death)
     next.goals = goals.filter(t => next.mine(t) == LAMBDA || next.mine(t) == LIFT)
-/*
-      if (Some(nextPos) == goals.headOption)
-        if (goals.tail == Nil && nextCollected == totalLambdas)
-          List(liftPos)
-        else goals.tail
-      else goals
-*/
     if (Lifter.best.score < nextScore + 25 * collected) {
       Lifter.best = next.result
       Lifter.entry = Lifter.best.moveString

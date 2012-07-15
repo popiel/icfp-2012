@@ -104,6 +104,21 @@ class StateSpec extends Spec with ShouldMatchers {
       state.collected should equal (0)
     }
 */
+
+    it("should make a ramp for lift") {
+      val input = """|##*..
+                     |L..#.
+                     |#R##.""".stripMargin
+      val state = State(Source.fromString(input))
+      import state.base._
+      original(liftPos) should equal (LIFT)
+      val ramp = makeRamp(liftPos)
+      ramp(liftPos) should equal (0)
+      ramp(liftPos + RIGHT) should equal (1)
+      ramp(state.rPos) should equal (2)
+      ramp(state.rPos + RIGHT + UP + UP) should equal (3)
+      ramp(state.rPos + RIGHT + RIGHT + RIGHT) should equal (7)
+    }
   }
 }
 

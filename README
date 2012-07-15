@@ -111,3 +111,15 @@ Queue refactor seems to be working.
 
 Sat Jul 14 23:02:16 PDT 2012
 More tweaks to priority, goals.
+
+Sun Jul 15 08:33:32 PDT 2012
+It's morning.  have read email, see that the final amendment has been
+announced.  I'll be fetching it in a moment.
+
+Priorities for today:
+1. Fix approach to lift, so we properly solve map 1.
+2. Fix mine representation (again), to eliminate stack overflows with long paths.
+3. Update rules to support trampolines, beards, and whatever the final mess is.
+
+Sun Jul 15 09:21:25 PDT 2012
+Fixed ramp, still not getting to lift.
