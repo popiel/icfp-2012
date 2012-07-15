@@ -16,8 +16,10 @@ package object wolfskeep {
 
 package wolfskeep {
 
-import scala.io._
 import scala.collection.mutable.ListBuffer
+import scala.io._
+import scala.util.matching.Regex
+import scala.util.matching.Regex.Match
 
 case class EndGame(score: Int, outcome: String, path: List[Char]) {
   def moveString = path.reverse.mkString
@@ -27,15 +29,32 @@ case class EndGame(score: Int, outcome: String, path: List[Char]) {
 object State {
   def apply(source: Source): State = {
     var waterLevel: Int = 0
-    var waterRate: Int = 0
+    var waterRate : Int = 0
     var proofTurns: Int = 10
+    var growthRate: Int = 25
+    var razorCount: Int = 0
+    val target = scala.collection.mutable.Map[Char,Int]()
+
+    val metas = Map[Regex, String => Unit] (
+      """Water *(\d+)""".r                -> { s: String => waterLevel  = s.toInt },
+      """Flooding *(\d+)""".r             -> { s: String => waterRate   = s.toInt },
+      """Waterproof *(\d+)""".r           -> { s: String => proofTurns  = s.toInt },
+      """Growth *(\d+)""".r               -> { s: String => growthRate  = s.toInt },
+      """Razors *(\d+)""".r               -> { s: String => razorCount  = s.toInt },
+      """Trampoline A targets *(\d+)""".r -> { s: String => target('A') = s.toInt },
+      """Trampoline B targets *(\d+)""".r -> { s: String => target('B') = s.toInt },
+      """Trampoline C targets *(\d+)""".r -> { s: String => target('C') = s.toInt },
+      """Trampoline D targets *(\d+)""".r -> { s: String => target('D') = s.toInt },
+      """Trampoline E targets *(\d+)""".r -> { s: String => target('E') = s.toInt },
+      """Trampoline F targets *(\d+)""".r -> { s: String => target('F') = s.toInt },
+      """Trampoline G targets *(\d+)""".r -> { s: String => target('G') = s.toInt },
+      """Trampoline H targets *(\d+)""".r -> { s: String => target('H') = s.toInt },
+      """Trampoline I targets *(\d+)""".r -> { s: String => target('I') = s.toInt }
+    )
 
     def eatMeta(lines: Seq[String]): Seq[String] = {
-      if (lines(0).startsWith("Water ")) waterLevel = lines(0).substring(6).toInt
-      else if (lines(0).startsWith("Flooding ")) waterRate = lines(0).substring(10).toInt
-      else if (lines(0).startsWith("Waterproof ")) proofTurns = lines(0).substring(12).toInt
-      else if (lines(0).length > 0) return lines
-      return eatMeta(lines.tail)
+      if (metas.filter(kv => !kv._1.findFirstMatchIn(lines(0)).map((m: Match) => kv._2(m.group(1))).isEmpty).isEmpty &&
+          lines(0).length > 0) lines else eatMeta(lines.tail)
     }
 
     val lines = eatMeta(source.getLines.toList.reverse)

@@ -119,6 +119,14 @@ class StateSpec extends Spec with ShouldMatchers {
       ramp(state.rPos + RIGHT + UP + UP) should equal (3)
       ramp(state.rPos + RIGHT + RIGHT + RIGHT) should equal (7)
     }
+
+    it("should read flood maps correctly") {
+      val state = State(Source.fromFile("maps/flood1.map"))
+      state.waterLevel should equal (1)
+      state.base.waterRate should equal (8)
+      state.base.proofTurns should equal (5)
+    }
+
   }
 }
 

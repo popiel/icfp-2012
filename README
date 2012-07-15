@@ -129,3 +129,6 @@ submission: MD5(../icfp-95267072.tgz)= 9ed28ed4033f5979c3110f01a429c2c7
 
 Sun Jul 15 10:00:54 PDT 2012
 Added the rest of the sample maps
+
+Sun Jul 15 11:17:31 PDT 2012
+Can read all maps, at least.
