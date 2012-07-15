@@ -9,3 +9,5 @@ date >>README
 echo -n "submission: " >>README
 openssl md5 ../icfp-95267072.tgz >>README
 git commit -a -m "`tail -1 README`"
+git push
+ls -l ../icfp-95267072.tgz
