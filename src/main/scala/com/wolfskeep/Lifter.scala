@@ -63,7 +63,8 @@ object State {
     val padded = ("#" * width) + lines.map{(s) => String.format("#%-"+(width - 2)+"s#", s)}.mkString("") + ("#" * width)
 
     val mine = padded.toCharArray
-    val state = new BaseState(width, height, mine, waterLevel, waterRate, proofTurns).toState
+    val state = new BaseState(width, height, mine, waterLevel, waterRate, proofTurns, growthRate,
+                              target.mapValues((t:Int) => mine.indexOf(t + '0')).toMap).toState
 
     Lifter.best = state.result
     state
@@ -76,7 +77,9 @@ class BaseState(
   val original: Array[Char],
   val waterLevel: Int,
   val waterRate: Int,
-  val proofTurns: Int
+  val proofTurns: Int,
+  val growthRate: Int,
+  val trampolines: Map[Char, Int]
 ) {
   lazy val totalLambdas = original.count(_ == LAMBDA)
   lazy val liftPos = original.indexOf(LIFT)
@@ -91,7 +94,7 @@ class BaseState(
 
   val dirMap = Map('L' -> LEFT, 'R' -> RIGHT, 'U' -> UP, 'D' -> DOWN, 'W' -> 0)
 
-  def toState = new State(this, Map().withDefault(original(_)), original.indexOf(ROBOT), null, waterLevel, waterRate, proofTurns)
+  def toState = new State(this, Map().withDefault(original(_)), original.indexOf(ROBOT), null, waterLevel)
 
   def makeRamp(pos: Int, ramp: Array[Int] = new Array[Int](width * height)): Array[Int] = {
     def spread(pos: Int) {
@@ -141,8 +144,8 @@ class State(
   val rPos: Int,
   givenUnstable: List[Int] = null,
   val waterLevel: Int,
-  val waterCountdown: Int,
-  val proofCountdown: Int,
+  val waterCount: Int = 0,
+  val proofCount: Int = 0,
   val moves: List[Char] = Nil,
   val score: Int = 0,
   val collected: Int = 0,
@@ -165,7 +168,7 @@ class State(
 
   override def clone: State = {
     new State(base, mine, rPos, unstable,
-              waterLevel, waterCountdown, proofCountdown,
+              waterLevel, waterCount, proofCount,
               moves, score, collected, outcome).withGoals(goals)
   }
 
@@ -180,7 +183,7 @@ class State(
   def move(cmd: Char): State = if (outcome != null) this else {
     if (cmd == 'A') {
       val next = new State(base, mine, rPos, unstable,
-                           waterLevel, waterCountdown, proofCountdown,
+                           waterLevel, waterCount, proofCount,
                            'A' +: moves, score + 25 * collected, collected, "abort")
       if (Lifter.best.score < next.score) {
         Lifter.best = next.result
@@ -195,7 +198,7 @@ class State(
     val replaced = mine(rPos + dir)
     if (replaced == LIFT && collected == totalLambdas) {
       val next = new State(base, mine, rPos + dir, unstable,
-                           waterLevel, waterCountdown, proofCountdown,
+                           waterLevel, waterCount, proofCount,
                            cmd +: moves, score + 50 * collected - 1, collected, "completed")
       if (Lifter.best.score < next.score) {
         Lifter.best = next.result
@@ -212,7 +215,6 @@ class State(
     var checklist = unstable
     var nextMine = Map[Int,Char]()
     var nextPos = rPos
-    var nextProof = proofCountdown
     val realCmd = {
       if ((cmd == 'L' || cmd == 'R') && replaced == ROCK && mine(rPos + dir + dir) == EMPTY) {
         nextMine += (rPos + dir + dir) -> ROCK
@@ -229,9 +231,6 @@ class State(
         nextMine += (rPos) -> EMPTY
         checklist = rPos +: checklist
         nextPos += dir
-        if (nextPos > waterLevel * width) {
-          nextProof = proofTurns
-        }
         cmd
       } else {
         'W'
@@ -279,13 +278,11 @@ class State(
         }
       }
     }
-    var nextLevel = if (waterRate > 0 && waterCountdown <= 1) waterLevel + 1 else waterLevel
-    if (nextPos <= (waterLevel) * width) {
-      nextProof -= 1
-      if (nextProof < 0) death = "robot drowned"
-    }
-    val next = new State(base, nextMine.withDefault(mine(_)), nextPos, future, nextLevel,
-                         if (waterCountdown <= 1) waterRate else waterCountdown - 1,
+    val nextProof = if (nextPos <= (waterLevel + 1) * width) proofCount + 1 else 0
+    if (nextProof > proofTurns) death = "robot drowned"
+    val next = new State(base, nextMine.withDefault(mine(_)), nextPos, future,
+                         if (waterCount == waterRate - 1) waterLevel + 1 else waterLevel,
+                         if (waterCount == waterRate - 1) 0 else waterCount + 1,
                          nextProof, realCmd +: moves, nextScore, nextCollected, death)
     next.goals = goals.filter(t => next.mine(t) == LAMBDA || next.mine(t) == LIFT)
     if (Lifter.best.score < nextScore + 25 * collected) {

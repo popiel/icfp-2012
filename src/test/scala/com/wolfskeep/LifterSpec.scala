@@ -127,6 +127,19 @@ class StateSpec extends Spec with ShouldMatchers {
       state.base.proofTurns should equal (5)
     }
 
+    it("should count water turns correctly") {
+      val state = State(Source.fromFile("maps/flood1.map"))
+      state.run("LLLLDDRRRRLDRDL").waterLevel should equal (2)
+      state.run("LLLLDDRRRRLDRDLR").waterLevel should equal (3)
+      state.run("LLLLDDRRRRLDRDLR").proofCount should equal (0)
+      state.run("LLLLDDRRRRLDRDLRD").proofCount should equal (1)
+      state.run("LLLLDDRRRRLDRDLRDL").proofCount should equal (2)
+      state.run("LLLLDDRRRRLDRDLRDLR").proofCount should equal (3)
+      state.run("LLLLDDRRRRLDRDLRDLRR").proofCount should equal (4)
+      state.run("LLLLDDRRRRLDRDLRDLRRU").proofCount should equal (5)
+      state.run("LLLLDDRRRRLDRDLRDLRRUL").outcome should equal ("robot drowned")
+    }
+
   }
 }
 
