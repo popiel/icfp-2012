@@ -175,7 +175,7 @@ class State(
     val dir = dirMap(cmd)
     val replaced = mine(rPos + dir)
     if (replaced == LIFT && collected == totalLambdas) {
-      val next = new State(base, mine, rPos, unstable,
+      val next = new State(base, mine, rPos + dir, unstable,
                            waterLevel, waterCountdown, proofCountdown,
                            cmd +: moves, score + 50 * collected - 1, collected, "completed")
       if (Lifter.best.score < next.score) {
@@ -296,6 +296,12 @@ class State(
       if (mine(rPos + LEFT ) == ROCK && mine(rPos + LEFT  * 2) == EMPTY) list = 'L' +: list
       else if (passable(mine(rPos + LEFT))) list = 'L' +: list
       if (passable(mine(rPos + UP))) list = 'U' +: list
+      if (collected == totalLambdas) {
+        if (rPos + DOWN  == liftPos) list = 'D' +: list
+        if (rPos + RIGHT == liftPos) list = 'R' +: list
+        if (rPos + LEFT  == liftPos) list = 'L' +: list
+        if (rPos + UP    == liftPos) list = 'U' +: list
+      }
     }
     list
   }
