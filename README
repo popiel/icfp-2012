@@ -135,3 +135,6 @@ Can read all maps, at least.
 
 Sun Jul 15 12:26:25 PDT 2012
 Fixed water counting; had an off-by-one on the water level.
+
+Sun Jul 15 12:32:26 PDT 2012
+submission: MD5(../icfp-95267072.tgz)= 0a2bef64fa7d82521ee71ad4570ef9e0
