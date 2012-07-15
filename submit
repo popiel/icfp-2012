@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+mvn clean
+mvn test
+tar -czf ../icfp-95267072.tgz --exclude .git --exclude lib --exclude .\*.swp .
+tar -tzf ../icfp-95267072.tgz
+echo >>README
+date >>README
+echo -n "submission: " >>README
+openssl md5 ../icfp-95267072.tgz >>README
+git commit -a -m "`tail -1 README`"
