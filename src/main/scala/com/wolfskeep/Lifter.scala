@@ -146,7 +146,8 @@ class State(
 
   def withGoals(g: Seq[Int]) = { goals = g; this }
 
-  def priority = (((score, rPos) /: goals) { (sp, t) => (sp._1 - base.ramps(t)(sp._2), t) })._1
+  def priority = (((score - 25 * collected, rPos) /: (goals.filter(t => mine(t) == LAMBDA || mine(t) == LIFT)))
+                  { (sp, t) => (sp._1 - base.ramps(t)(sp._2), t) })._1
   // def priority = score - goals.headOption.map(p => base.ramps(p)(rPos)).getOrElse(0)
 
   def move(cmd: Char): State = if (outcome != null) this else {
@@ -259,12 +260,14 @@ class State(
     val next = new State(base, nextMine.withDefault(mine(_)), nextPos, future, nextLevel,
                          if (waterCountdown <= 1) waterRate else waterCountdown - 1,
                          nextProof, realCmd +: moves, nextScore, nextCollected, death)
-    next.goals =
+    next.goals = goals.filter(t => next.mine(t) == LAMBDA || next.mine(t) == LIFT)
+/*
       if (Some(nextPos) == goals.headOption)
         if (goals.tail == Nil && nextCollected == totalLambdas)
           List(liftPos)
         else goals.tail
       else goals
+*/
     if (Lifter.best.score < nextScore + 25 * collected) {
       Lifter.best = next.result
       Lifter.entry = Lifter.best.moveString
@@ -325,14 +328,19 @@ object Lifter {
       def compare(x: State, y: State): Int = x.priority - y.priority
     }
     val queue = new scala.collection.mutable.PriorityQueue[State]
-    queue += startingState.clone.withGoals(lambdas)
+    queue += startingState.clone.withGoals(lambdas :+ base.liftPos)
 
-    while (!queue.isEmpty) {
-      val state = queue.dequeue()
-      val children = state.legalMoves.map(state.move(_))
-      val win = children.find(_.rPos == base.liftPos)
-      if (!win.isEmpty) return
-      queue ++= children
+    try {
+      while (!queue.isEmpty) {
+        val state = queue.dequeue()
+        val children = state.legalMoves.map(state.move(_))
+        val win = children.find(_.rPos == base.liftPos)
+        if (!win.isEmpty) return
+        queue ++= children
+      }
+    } catch {
+      case d: ThreadDeath => throw d
+      case t: Throwable => println(t.toString.toLowerCase); return
     }
   }
 }
