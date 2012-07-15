@@ -44,7 +44,10 @@ object State {
     val padded = ("#" * width) + lines.map{(s) => String.format("#%-"+(width - 2)+"s#", s)}.mkString("") + ("#" * width)
 
     val mine = padded.toCharArray
-    new BaseState(width, height, mine, waterLevel, waterRate, proofTurns).toState
+    val state = new BaseState(width, height, mine, waterLevel, waterRate, proofTurns).toState
+
+    Lifter.best = state.result
+    state
   }
 }
 
@@ -57,6 +60,7 @@ class BaseState(
   val proofTurns: Int
 ) {
   lazy val totalLambdas = original.count(_ == LAMBDA)
+  lazy val liftPos = original.indexOf(LIFT)
 
   def LL = width + 1;
   def UR = width * height - width - 1;
@@ -68,9 +72,40 @@ class BaseState(
 
   val dirMap = Map('L' -> LEFT, 'R' -> RIGHT, 'U' -> UP, 'D' -> DOWN, 'W' -> 0)
 
-  def makeMine: scala.collection.mutable.Map[Int, Char] = new scala.collection.mutable.HashMap[Int,Char] { override def default(k: Int): Char = original(k) }
-
   def toState = new State(this, Map().withDefault(original(_)), original.indexOf(ROBOT), null, waterLevel, waterRate, proofTurns)
+
+  def makeRamp(pos: Int, ramp: Array[Int] = new Array[Int](width * height)): Array[Int] = {
+    def spread(pos: Int) {
+      var l = pos + LEFT
+      while (maybePassable(original(l)) && ramp(l) > ramp(l - LEFT) + 1) {
+        ramp(l) = ramp(l - LEFT) + 1
+        l += LEFT
+      }
+      var r = pos + RIGHT
+      while (maybePassable(original(r)) && ramp(r) > ramp(r - RIGHT) + 1) {
+        ramp(r) = ramp(r - RIGHT) + 1
+        r += RIGHT
+      }
+      for (p <- pos until l by LEFT) {
+        if (maybePassable(original(p + UP  )) && ramp(p + UP  ) > ramp(p) + 1) { ramp(p + UP  ) = ramp(p) + 1; spread(p + UP  ) }
+        if (maybePassable(original(p + DOWN)) && ramp(p + DOWN) > ramp(p) + 1) { ramp(p + DOWN) = ramp(p) + 1; spread(p + DOWN) }
+      }
+      for (p <- pos until r by RIGHT) {
+        if (maybePassable(original(p + UP  )) && ramp(p + UP  ) > ramp(p) + 1) { ramp(p + UP  ) = ramp(p) + 1; spread(p + UP  ) }
+        if (maybePassable(original(p + DOWN)) && ramp(p + DOWN) > ramp(p) + 1) { ramp(p + DOWN) = ramp(p) + 1; spread(p + DOWN) }
+      }
+    }
+    java.util.Arrays.fill(ramp, Integer.MAX_VALUE)
+    ramp(pos) = 0
+    spread(pos)
+    ramp
+  }
+
+  val ramps = new collection.mutable.HashMap[Int, Array[Int]] {
+    override def default(pos: Int): Array[Int] = { val ramp = makeRamp(pos); put(pos, ramp); ramp }
+  }
+
+
 }
 
 class State(
@@ -101,20 +136,45 @@ class State(
     builder.toList
   }
 
+  override def clone: State = {
+    new State(base, mine, rPos, unstable,
+              waterLevel, waterCountdown, proofCountdown,
+              moves, score, collected, outcome).withGoals(goals)
+  }
+
+  var goals: Seq[Int] = Nil
+
+  def withGoals(g: Seq[Int]) = { goals = g; this }
+
+  def priority = (((score, rPos) /: goals) { (sp, t) => (sp._1 - base.ramps(t)(sp._2), t) })._1
+  // def priority = score - goals.headOption.map(p => base.ramps(p)(rPos)).getOrElse(0)
+
   def move(cmd: Char): State = if (outcome != null) this else {
     if (cmd == 'A') {
-      return new State(base, mine, rPos, unstable,
-                       waterLevel, waterCountdown, proofCountdown,
-                       'A' +: moves, score + 25 * collected, collected, "abort")
+      val next = new State(base, mine, rPos, unstable,
+                           waterLevel, waterCountdown, proofCountdown,
+                           'A' +: moves, score + 25 * collected, collected, "abort")
+      if (Lifter.best.score < next.score) {
+        Lifter.best = next.result
+        Lifter.entry = Lifter.best.moveString
+        println(next.toString)
+      }
+      return next
     }
     var nextScore = score - 1
     var nextCollected = collected
     val dir = dirMap(cmd)
     val replaced = mine(rPos + dir)
     if (replaced == LIFT && collected == totalLambdas) {
-      return new State(base, mine, rPos, unstable,
-                       waterLevel, waterCountdown, proofCountdown,
-                       cmd +: moves, score + 50 * collected - 1, collected, "completed")
+      val next = new State(base, mine, rPos, unstable,
+                           waterLevel, waterCountdown, proofCountdown,
+                           cmd +: moves, score + 50 * collected - 1, collected, "completed")
+      if (Lifter.best.score < next.score) {
+        Lifter.best = next.result
+        Lifter.entry = Lifter.best.moveString
+        println(next.toString)
+      }
+      return next
     }
     if (replaced == LAMBDA) {
       nextCollected += 1
@@ -196,11 +256,21 @@ class State(
       nextProof -= 1
       if (nextProof < 0) death = "robot drowned"
     }
-    return new State(base, nextMine.withDefault(mine(_)), nextPos, future,
-                     nextLevel,
-                     if (waterCountdown <= 1) waterRate else waterCountdown - 1,
-                     nextProof,
-                     realCmd +: moves, nextScore, nextCollected, death)
+    val next = new State(base, nextMine.withDefault(mine(_)), nextPos, future, nextLevel,
+                         if (waterCountdown <= 1) waterRate else waterCountdown - 1,
+                         nextProof, realCmd +: moves, nextScore, nextCollected, death)
+    next.goals =
+      if (Some(nextPos) == goals.headOption)
+        if (goals.tail == Nil && nextCollected == totalLambdas)
+          List(liftPos)
+        else goals.tail
+      else goals
+    if (Lifter.best.score < nextScore + 25 * collected) {
+      Lifter.best = next.result
+      Lifter.entry = Lifter.best.moveString
+      println(next.move('A').toString)
+    }
+    next
   }
 
   def run(cmds: String) = {
@@ -212,33 +282,6 @@ class State(
   def result = EndGame(score, (if (outcome == null) "unfinished" else outcome), moves)
 
   override def toString = (mineString + "\n" + result).toLowerCase
-
-  def makeRamp(pos: Int, ramp: Array[Int] = new Array[Int](width * height)): Array[Int] = {
-    def spread(pos: Int) {
-      var l = pos + LEFT
-      while (maybePassable(mine(l)) && ramp(l) > ramp(l - LEFT) + 1) {
-        ramp(l) = ramp(l - LEFT) + 1
-        l += LEFT
-      }
-      var r = pos + RIGHT
-      while (maybePassable(mine(r)) && ramp(r) > ramp(r - RIGHT) + 1) {
-        ramp(r) = ramp(r - RIGHT) + 1
-        r += RIGHT
-      }
-      for (p <- pos until l by LEFT) {
-        if (maybePassable(mine(p + UP  )) && ramp(p + UP  ) > ramp(p) + 1) { ramp(p + UP  ) = ramp(p) + 1; spread(p + UP  ) }
-        if (maybePassable(mine(p + DOWN)) && ramp(p + DOWN) > ramp(p) + 1) { ramp(p + DOWN) = ramp(p) + 1; spread(p + DOWN) }
-      }
-      for (p <- pos until r by RIGHT) {
-        if (maybePassable(mine(p + UP  )) && ramp(p + UP  ) > ramp(p) + 1) { ramp(p + UP  ) = ramp(p) + 1; spread(p + UP  ) }
-        if (maybePassable(mine(p + DOWN)) && ramp(p + DOWN) > ramp(p) + 1) { ramp(p + DOWN) = ramp(p) + 1; spread(p + DOWN) }
-      }
-    }
-    java.util.Arrays.fill(ramp, Integer.MAX_VALUE)
-    ramp(pos) = 0
-    spread(pos)
-    ramp
-  }
 
   def legalMoves = {
     var list: List[Char] = Nil
@@ -252,21 +295,12 @@ class State(
     }
     list
   }
-
-  def findPath(pos: Int, ramp: Array[Int]): Option[State] = {
-    if (rPos == pos) return Some(this)
-    val moves = legalMoves.sortBy(cmd => ramp(rPos + dirMap(cmd)))
-    
-    (Option[State](null) /: moves) { (b,c) => b orElse {
-      val next = move(c)
-      if (next.rPos == pos) Some(next) else next.findPath(pos, ramp)
-    } }
-  }
 }
 
 object Lifter {
 
   @volatile var entry: String = ""
+  var best: EndGame = null
 
   def main(args : Array[String]) {
     // First, set up our time limits
@@ -276,7 +310,7 @@ object Lifter {
     alarm.start
 
     val startingState = State(Source.stdin)
-    var best = startingState.result
+    val base = startingState.base
 
     if (args.size > 0 && args(0) == "-run") {
       val result = (startingState /: (args.tail :+ "A")) { _ run _ }
@@ -285,52 +319,21 @@ object Lifter {
       return
     }
 
-    val ramps = new collection.mutable.HashMap[Int, Array[Int]] {
-      override def default(pos: Int): Array[Int] = { val ramp = startingState.makeRamp(pos); put(pos, ramp); ramp }
+    val lambdas = (base.LL until base.UR).filter(pos => base.original(pos) == LAMBDA)
+
+    implicit val order = new Ordering[State] {
+      def compare(x: State, y: State): Int = x.priority - y.priority
     }
+    val queue = new scala.collection.mutable.PriorityQueue[State]
+    queue += startingState.clone.withGoals(lambdas)
 
-    val lambdas = (startingState.base.LL until startingState.base.UR).filter(pos => startingState.base.original(pos) == LAMBDA)
-
-    def findPath(start: State, finish: Int): Option[State] = {
-      if (start.rPos == finish) return Some(start)
-      val ramp = ramps(finish);
-      implicit val order = new Ordering[State] {
-        def compare(x: State, y: State): Int = (ramp(y.rPos) - y.score) - (ramp(x.rPos) - x.score)
-      }
-      val queue = new scala.collection.mutable.PriorityQueue
-      queue += start
-      while (!queue.isEmpty) {
-        val state = queue.dequeue()
-        val children = state.legalMoves.map(state.move(_))
-        val win = children.find(_.rPos == finish)
-        if (!win.isEmpty) return win
-        queue ++= children
-      }
-      None
+    while (!queue.isEmpty) {
+      val state = queue.dequeue()
+      val children = state.legalMoves.map(state.move(_))
+      val win = children.find(_.rPos == base.liftPos)
+      if (!win.isEmpty) return
+      queue ++= children
     }
-
-    def makeTraversal(lambdas: Seq[Int]) {
-      val state = (startingState /: lambdas) { (state, target) =>
-        val next = findPath(state, target).getOrElse(state)
-        if (best.score < state.move('A').score) {
-          best = state.move('A').result
-          entry = best.moveString
-          println(state.move('A').toString)
-        }
-        next
-      }
-      val finish = if (state.collected == state.base.totalLambdas) {
-        val target = state.base.original.indexOf(LIFT)
-        findPath(state, target).getOrElse(state)
-      } else state
-      if (best.score < finish.move('A').score) {
-        best = finish.move('A').result
-        entry = best.moveString
-      }
-      println(finish.move('A').toString)
-    }
-
-    makeTraversal(lambdas)
   }
 }
 
