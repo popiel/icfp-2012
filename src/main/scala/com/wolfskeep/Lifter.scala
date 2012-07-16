@@ -98,6 +98,8 @@ class BaseState(
   def UP = width
   def DOWN = -width
 
+  val dirs8 = List(LEFT, RIGHT, UP, DOWN, LEFT+UP, LEFT+DOWN, RIGHT+UP, RIGHT+DOWN)
+  val dirs4 = List(LEFT, RIGHT, UP, DOWN)
   val dirMap = Map('L' -> LEFT, 'R' -> RIGHT, 'U' -> UP, 'D' -> DOWN, 'W' -> 0, 'S' -> 0)
 
   def toState(razorCount: Int) =
@@ -189,7 +191,7 @@ class State(
 
   def withGoals(g: Seq[Int]) = { goals = g; this }
 
-  def priority = (((score - 25 * collected, rPos) /: (goals.filter(t => mine(t) == LAMBDA || mine(t) == LIFT)))
+  def priority = (((score - 20 * collected, rPos) /: (goals.filter(t => mine(t) == LAMBDA || mine(t) == LIFT)))
                   { (sp, t) => (sp._1 - base.ramps(t)(sp._2), t) })._1
   // def priority = score - goals.headOption.map(p => base.ramps(p)(rPos)).getOrElse(0)
 
@@ -237,7 +239,7 @@ class State(
         if (razorCount > 0) {
           nextRazors -= 1
           for {
-            dp <- List(LEFT, RIGHT, UP, DOWN, LEFT+UP, LEFT+DOWN, RIGHT+UP, RIGHT+DOWN)
+            dp <- dirs8
             pos = rPos + dp
             if mine(pos) == BEARD
           } nextMine += pos -> EMPTY
@@ -312,6 +314,8 @@ class State(
             future = (pos + DOWN) +: future
           } else {
             nextMine += (pos) -> LAMBDA
+            if (goals.isEmpty) goals = List(pos)
+            else goals.init :+ pos :+ liftPos
           }
           if (midMine(pos + DOWN) == ROBOT) {
             death = "robot crushed"
@@ -325,7 +329,7 @@ class State(
       for {
         b <- beards if midMine(b) == BEARD
         junk = (nb += b)
-        d <- List(LEFT, RIGHT, UP, DOWN, LEFT+UP, LEFT+DOWN, RIGHT+UP, RIGHT+DOWN)
+        d <- dirs8
         if midMine(b + d) == EMPTY
         if d == LEFT+DOWN || nextMine.get(b + d) != Some(ROCK)
       } {
@@ -342,6 +346,14 @@ class State(
                          nextProof, realCmd +: moves, nextScore, nextCollected, death,
                          nextRazors, (growthCount + 1) % growthRate, nextBeards)
     next.goals = goals.filter(t => next.mine(t) == LAMBDA || next.mine(t) == LIFT)
+    if (next.goals.isEmpty || next.goals(0) == liftPos && next.collected != totalLambdas) {
+      next.goals =
+        if (next.collected == totalLambdas) List(liftPos)
+        else {
+          val ramp = ramps(next.rPos)
+          (LL until UR).filter(pos => next.mine(pos) == LAMBDA).sortBy(ramp).take(1)
+        }
+    }
     if (Lifter.best.score < nextScore + 25 * collected) {
       Lifter.best = next.result
       Lifter.entry = Lifter.best.moveString
@@ -363,7 +375,7 @@ class State(
   def legalMoves = {
     var list: List[Char] = Nil
     if (outcome == null) {
-      if (razorCount > 0) list = 'S' +: list
+      if (razorCount > 0 && !beards.intersect(dirs8.map(d => rPos + d)).isEmpty) list = 'S' +: list
       if (passable(mine(rPos + DOWN))) list = 'D' +: list
       if (mine(rPos + RIGHT) == ROCK && mine(rPos + RIGHT * 2) == EMPTY) list = 'R' +: list
       if (mine(rPos + RIGHT) == HOROCK && mine(rPos + RIGHT * 2) == EMPTY) list = 'R' +: list
@@ -414,6 +426,10 @@ object Lifter {
     }
     val queue = new scala.collection.mutable.PriorityQueue[State]
     queue += startingState.clone.withGoals(lambdas :+ base.liftPos)
+    //queue += startingState.clone.withGoals(scala.util.Random.shuffle(lambdas) :+ base.liftPos)
+    //queue += startingState.clone.withGoals(scala.util.Random.shuffle(lambdas) :+ base.liftPos)
+    //queue += startingState.clone.withGoals(scala.util.Random.shuffle(lambdas) :+ base.liftPos)
+    //queue += startingState
 
     try {
       while (!queue.isEmpty) {

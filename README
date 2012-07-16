@@ -4,23 +4,53 @@ overhead and because I cannot find anybody local with the same dedication
 to the contest that I have.
 
 This is the first year that I'm doing the contest in what is arguably a
-functional languange; this year, I'm using Scala.  Huzzah!
+functional languange; this year, I'm using Scala.  Huzzah!  My work for
+previous years has been in Java, C, and Perl.
 
 Random notes:
 * I'm using maven, just because I'm using it at work, and it's a convenient
   way to make sure that all the dependent jars I feel like pulling in actually
-  end up in my submission image.  To compile from source, 'mvn compile'.
+  end up in my submission image.  To compile from source and run unit tests,
+  'mvn scala:run'.
+
+* All map coordinates are one-dimensional for me.  This is a trick I learned
+  long, long ago; by just maying out the map in row-major order in a single
+  array, symmetry between the different directions is exposed.  Add in an
+  extra border wall (which was implied in the spec anyway), and you also
+  eliminate all need for boundary checking.
+
+* I ended up revisiting my storage layer something like 4 times.  If you
+  want to see the history, I can make my git repository public.
 
 * The very first significant decision I made was to do map updates in place,
   to save on memory consumption and memory copies.  This does mean that for
   backtracking, I'm going to have to replay move sequences... but I suspect
   that will be less expensive in the long run than tons of memory copies.
 
+  Of course, I later ended up partially recanting on this, and now have a
+  map structure involving the original map and then patches layered on top
+  of that.  With this incremental approach, backtracking is instantaneous,
+  but I do run out of stack space on the long paths.  I was contemplating
+  yet another rewrite of this, so that I did actually change the original
+  map, but kept a better-formed log of update tuples (position, from, to)
+  for rapid reconstruction... but no energy for that.
+
 * The second significant decision was to express map update in terms of the
   destination cells instead of the source cells.  In the process, I introduced
   a new cell state for "a rock _was_ here just a moment ago", but eliminated
   the need for a prior image of the map.  I have a second pass during update
   to clean up the dust of moving rocks.
+
+  Again, this was revisited and the extra state was removed, when I could
+  easily look at multiple versions of the map without a hefty memory cost.
+
+* My main algorithm is A* search from point to point, with a floodfill
+  gradient ignoring rocks and other movable objects to act as my cost
+  underestimate.  I had intended to later play games with reordering the
+  goals in an optimization phase (and have a fair amount of experience
+  with that from long ago... the ideal mutator seems to be picking a
+  random subsequence and either repositioning it or reversing it), but
+  the spec updates were too numerous for me to ever get to it.
 
 
 Fri Jul 13 06:30:00 PDT 2012
@@ -147,3 +177,11 @@ Returning to the underwater beard-shaving competition.
 
 Sun Jul 15 18:16:24 PDT 2012
 submission: MD5(../icfp-95267072.tgz)= 123df9b81949d6f6a3a4a35785b73840
+
+Sun Jul 15 18:26:55 PDT 2012
+Just about ready to give up.  Too tired to do much more.
+
+Sun Jul 15 20:42:20 PDT 2012
+OK, have written up a bit more notes at the top of the file.  In the process,
+got a bit more energy to continue, and managed to improve my horocks solution
+(now it'll pick up horocks that it happens to break open by accident)

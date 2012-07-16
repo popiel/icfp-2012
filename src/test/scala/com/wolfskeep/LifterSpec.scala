@@ -213,6 +213,12 @@ class StateSpec extends Spec with ShouldMatchers {
       state.mine(state.rPos + LEFT + LEFT + UP + UP) should equal (LAMBDA)
     }
 
+    it("should grow beards on the horocks map") {
+      val state = State(Source.fromFile("maps/horock3.map")).run("RRRRRRRRRRRRRLULULULULULULULULLLDLDLDDDUUUUURUUURRRDRDDDA")
+      import state.base._
+      state.mine(liftPos + UP) should equal (BEARD)
+    }
+
   }
 }
 
