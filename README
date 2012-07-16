@@ -188,3 +188,11 @@ got a bit more energy to continue, and managed to improve my horocks solution
 
 Sun Jul 15 20:48:12 PDT 2012
 submission: MD5(../icfp-95267072.tgz)= afbce0f2a005426b02490950f01af41a
+
+Sun Jul 15 21:03:15 PDT 2012
+Just realized how to avoid the stack overflow on long paths, and I feel dumb.
+Just use the immutable maps as they were meant to be used, instead of
+stringing quite so many together with defaulting.  Only about a 5 line change.
+
+Sun Jul 15 21:09:44 PDT 2012
+submission: MD5(../icfp-95267072.tgz)= 98e4a846ddcc4684c3e1089e6d7ad2fb

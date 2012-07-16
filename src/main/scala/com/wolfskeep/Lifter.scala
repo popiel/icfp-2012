@@ -103,7 +103,7 @@ class BaseState(
   val dirMap = Map('L' -> LEFT, 'R' -> RIGHT, 'U' -> UP, 'D' -> DOWN, 'W' -> 0, 'S' -> 0)
 
   def toState(razorCount: Int) =
-    new State(this, Map().withDefault(original(_)), original.indexOf(ROBOT), null, waterLevel,
+    new State(this, scala.collection.immutable.ListMap[Int,Char]().withDefault(original(_)), original.indexOf(ROBOT), null, waterLevel,
               razorCount = razorCount, beards = (LL until UR).filter(pos => original(pos) == BEARD))
 
   def makeRamp(pos: Int, ramp: Array[Int] = new Array[Int](width * height)): Array[Int] = {
@@ -232,7 +232,7 @@ class State(
       // if (peak.score < score + 25 * collected) peak = EndGame(score + 25 * collected, "Abort", moves)
     }
     var checklist = unstable
-    var nextMine = Map[Int,Char]()
+    var nextMine = mine
     var nextPos = rPos
     val realCmd = {
       if (cmd == 'S') {
@@ -267,7 +267,7 @@ class State(
       }
     }
 
-    val midMine = (Map[Int,Char]() ++ nextMine).withDefault(mine(_))
+    val midMine = nextMine.withDefault(original(_))
 
     var future: List[Int] = Nil
     var death: String = null
@@ -340,7 +340,7 @@ class State(
     }
     val nextProof = if (nextPos <= (waterLevel + 1) * width) proofCount + 1 else 0
     if (nextProof > proofTurns) death = "robot drowned"
-    val next = new State(base, nextMine.withDefault(mine(_)), nextPos, future,
+    val next = new State(base, nextMine.withDefault(original(_)), nextPos, future,
                          if (waterCount == waterRate - 1) waterLevel + 1 else waterLevel,
                          if (waterCount == waterRate - 1) 0 else waterCount + 1,
                          nextProof, realCmd +: moves, nextScore, nextCollected, death,
