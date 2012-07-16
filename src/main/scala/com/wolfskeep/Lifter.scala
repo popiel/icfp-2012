@@ -9,9 +9,15 @@ package object wolfskeep {
   val OPEN = 'O'
   val EARTH = '.'
   val EMPTY = ' '
+  val BEARD = 'W'
+  val RAZOR = '!'
+  val HOROCK = '@'
 
-  def passable     (cell: Char) = (cell == EMPTY || cell == EARTH || cell == LAMBDA)
-  def maybePassable(cell: Char) = (cell == EMPTY || cell == EARTH || cell == LAMBDA || cell == ROCK || cell == ROBOT)
+  def passable     (cell: Char) = (cell == EMPTY || cell == EARTH || cell == LAMBDA || cell == RAZOR)
+  def maybePassable(cell: Char) = (cell == EMPTY || cell == EARTH || cell == LAMBDA || cell == RAZOR ||
+                                   cell == BEARD || cell == ROCK  || cell == HOROCK || cell == ROBOT)
+
+  var verbose = false;
 }
 
 package wolfskeep {
@@ -64,7 +70,7 @@ object State {
 
     val mine = padded.toCharArray
     val state = new BaseState(width, height, mine, waterLevel, waterRate, proofTurns, growthRate,
-                              target.mapValues((t:Int) => mine.indexOf(t + '0')).toMap).toState
+                              target.mapValues((t:Int) => mine.indexOf(t + '0')).toMap).toState(razorCount)
 
     Lifter.best = state.result
     state
@@ -81,8 +87,8 @@ class BaseState(
   val growthRate: Int,
   val trampolines: Map[Char, Int]
 ) {
-  lazy val totalLambdas = original.count(_ == LAMBDA)
-  lazy val liftPos = original.indexOf(LIFT)
+  val totalLambdas = original.count(c => c == LAMBDA || c == HOROCK)
+  val liftPos = original.indexOf(LIFT)
 
   def LL = width + 1;
   def UR = width * height - width - 1;
@@ -92,9 +98,11 @@ class BaseState(
   def UP = width
   def DOWN = -width
 
-  val dirMap = Map('L' -> LEFT, 'R' -> RIGHT, 'U' -> UP, 'D' -> DOWN, 'W' -> 0)
+  val dirMap = Map('L' -> LEFT, 'R' -> RIGHT, 'U' -> UP, 'D' -> DOWN, 'W' -> 0, 'S' -> 0)
 
-  def toState = new State(this, Map().withDefault(original(_)), original.indexOf(ROBOT), null, waterLevel)
+  def toState(razorCount: Int) =
+    new State(this, Map().withDefault(original(_)), original.indexOf(ROBOT), null, waterLevel,
+              razorCount = razorCount, beards = (LL until UR).filter(pos => original(pos) == BEARD))
 
   def makeRamp(pos: Int, ramp: Array[Int] = new Array[Int](width * height)): Array[Int] = {
     def spread(pos: Int) {
@@ -149,7 +157,10 @@ class State(
   val moves: List[Char] = Nil,
   val score: Int = 0,
   val collected: Int = 0,
-  val outcome: String = null
+  val outcome: String = null,
+  val razorCount: Int = 0,
+  val growthCount: Int = 0,
+  val beards: Seq[Int] = Nil
 ) {
   import base._
  
@@ -159,8 +170,10 @@ class State(
     val builder = new ListBuffer[Int]
     for (pos <- LL until UR) {
       if (mine(pos) == EMPTY &&
-          (mine(pos + UP) == ROCK ||
-           (mine(pos + UP) == EMPTY && (mine(pos + UP + LEFT) == ROCK || mine(pos + UP + RIGHT) == ROCK))))
+          ((mine(pos + UP) == ROCK ||
+            (mine(pos + UP) == EMPTY && (mine(pos + UP + LEFT) == ROCK || mine(pos + UP + RIGHT) == ROCK))) ||
+           (mine(pos + UP) == HOROCK ||
+            (mine(pos + UP) == EMPTY && (mine(pos + UP + LEFT) == HOROCK || mine(pos + UP + RIGHT) == HOROCK)))))
         builder += pos
     }
     builder.toList
@@ -169,7 +182,7 @@ class State(
   override def clone: State = {
     new State(base, mine, rPos, unstable,
               waterLevel, waterCount, proofCount,
-              moves, score, collected, outcome).withGoals(goals)
+              moves, score, collected, outcome, razorCount).withGoals(goals)
   }
 
   var goals: Seq[Int] = Nil
@@ -184,28 +197,32 @@ class State(
     if (cmd == 'A') {
       val next = new State(base, mine, rPos, unstable,
                            waterLevel, waterCount, proofCount,
-                           'A' +: moves, score + 25 * collected, collected, "abort")
+                           'A' +: moves, score + 25 * collected, collected, "abort", razorCount, growthCount, beards)
       if (Lifter.best.score < next.score) {
         Lifter.best = next.result
         Lifter.entry = Lifter.best.moveString
-        println(next.toString)
+        if (verbose) println(next.toString)
       }
       return next
     }
     var nextScore = score - 1
     var nextCollected = collected
+    var nextRazors = razorCount
     val dir = dirMap(cmd)
     val replaced = mine(rPos + dir)
     if (replaced == LIFT && collected == totalLambdas) {
       val next = new State(base, mine, rPos + dir, unstable,
                            waterLevel, waterCount, proofCount,
-                           cmd +: moves, score + 50 * collected - 1, collected, "completed")
+                           cmd +: moves, score + 50 * collected - 1, collected, "completed", razorCount, growthCount, beards)
       if (Lifter.best.score < next.score) {
         Lifter.best = next.result
         Lifter.entry = Lifter.best.moveString
-        println(next.toString)
+        if (verbose) println(next.toString)
       }
       return next
+    }
+    if (replaced == RAZOR) {
+      nextRazors += 1
     }
     if (replaced == LAMBDA) {
       nextCollected += 1
@@ -216,8 +233,18 @@ class State(
     var nextMine = Map[Int,Char]()
     var nextPos = rPos
     val realCmd = {
-      if ((cmd == 'L' || cmd == 'R') && replaced == ROCK && mine(rPos + dir + dir) == EMPTY) {
-        nextMine += (rPos + dir + dir) -> ROCK
+      if (cmd == 'S') {
+        if (razorCount > 0) {
+          nextRazors -= 1
+          for {
+            dp <- List(LEFT, RIGHT, UP, DOWN, LEFT+UP, LEFT+DOWN, RIGHT+UP, RIGHT+DOWN)
+            pos = rPos + dp
+            if mine(pos) == BEARD
+          } nextMine += pos -> EMPTY
+          'S'
+        } else 'W'
+      } else if ((cmd == 'L' || cmd == 'R') && (replaced == ROCK || replaced == HOROCK) && mine(rPos + dir + dir) == EMPTY) {
+        nextMine += (rPos + dir + dir) -> replaced
         nextMine += (rPos + dir) -> ROBOT
         nextMine += (rPos) -> EMPTY
         checklist = List(rPos + DOWN + dir + dir + dir,
@@ -230,6 +257,7 @@ class State(
         nextMine += (rPos + dir) -> ROBOT
         nextMine += (rPos) -> EMPTY
         checklist = rPos +: checklist
+        checklist = (rPos + DOWN) +: checklist
         nextPos += dir
         cmd
       } else {
@@ -237,30 +265,33 @@ class State(
       }
     }
 
-    val midMine = (Map() ++ nextMine).withDefault(mine(_))
+    val midMine = (Map[Int,Char]() ++ nextMine).withDefault(mine(_))
 
     var future: List[Int] = Nil
     var death: String = null
     for (pos <- checklist.sorted) {
       if (midMine(pos) == EMPTY) {
         if (midMine(pos + UP) == EMPTY) {
-          if (midMine(pos + LEFT + UP) == ROCK &&
-              (midMine(pos + LEFT) == ROCK || midMine(pos + LEFT) == LAMBDA)) {
-            nextMine += (pos) -> ROCK
+          if ((midMine(pos + LEFT + UP) == ROCK || midMine(pos + LEFT + UP) == HOROCK) &&
+              (midMine(pos + LEFT) == ROCK || midMine(pos + LEFT) == HOROCK || midMine(pos + LEFT) == LAMBDA)) {
+            nextMine += (pos) -> midMine(pos + LEFT + UP)
             nextMine += (pos + LEFT + UP) -> EMPTY
             future = (pos + LEFT + UP) +: future
           }
-          if (midMine(pos + RIGHT + UP) == ROCK && midMine(pos + RIGHT) == ROCK &&
+        }
+        if (midMine(pos + UP) == ROCK || midMine(pos + UP) == HOROCK) {
+          nextMine += (pos) -> midMine(pos + UP)
+          nextMine += (pos + UP) -> EMPTY
+          future = (pos + UP) +: future
+        }
+        if (midMine(pos + UP) == EMPTY) {
+          if ((midMine(pos + RIGHT + UP) == ROCK || midMine(pos + RIGHT + UP) == HOROCK) &&
+              (midMine(pos + RIGHT) == ROCK || midMine(pos + RIGHT) == HOROCK) &&
               (midMine(pos + RIGHT + RIGHT) != EMPTY || midMine(pos + RIGHT + RIGHT + UP) != EMPTY)) {
-            nextMine += (pos) -> ROCK
+            nextMine += (pos) -> midMine(pos + RIGHT + UP)
             nextMine += (pos + RIGHT + UP) -> EMPTY
             future = (pos + RIGHT + UP) +: future
           }
-        }
-        if (midMine(pos + UP) == ROCK) {
-          nextMine += (pos) -> ROCK
-          nextMine += (pos + UP) -> EMPTY
-          future = (pos + UP) +: future
         }
         if (nextMine.get(pos) == Some(ROCK)) {
           if (midMine(pos + DOWN) == EMPTY) {
@@ -276,19 +307,45 @@ class State(
             death = "robot crushed"
           }
         }
+        if (nextMine.get(pos) == Some(HOROCK)) {
+          if (midMine(pos + DOWN) == EMPTY) {
+            future = (pos + DOWN) +: future
+          } else {
+            nextMine += (pos) -> LAMBDA
+          }
+          if (midMine(pos + DOWN) == ROBOT) {
+            death = "robot crushed"
+          }
+        }
       }
+    }
+    var nextBeards: Seq[Int] = beards
+    if (growthCount == growthRate - 1) {
+      val nb = ListBuffer[Int]()
+      for {
+        b <- beards if midMine(b) == BEARD
+        junk = (nb += b)
+        d <- List(LEFT, RIGHT, UP, DOWN, LEFT+UP, LEFT+DOWN, RIGHT+UP, RIGHT+DOWN)
+        if midMine(b + d) == EMPTY
+        if d == LEFT+DOWN || nextMine.get(b + d) != Some(ROCK)
+      } {
+        nextMine += (b + d) -> BEARD
+        nb += (b + d)
+      }
+      nextBeards = nb.toList
     }
     val nextProof = if (nextPos <= (waterLevel + 1) * width) proofCount + 1 else 0
     if (nextProof > proofTurns) death = "robot drowned"
     val next = new State(base, nextMine.withDefault(mine(_)), nextPos, future,
                          if (waterCount == waterRate - 1) waterLevel + 1 else waterLevel,
                          if (waterCount == waterRate - 1) 0 else waterCount + 1,
-                         nextProof, realCmd +: moves, nextScore, nextCollected, death)
+                         nextProof, realCmd +: moves, nextScore, nextCollected, death,
+                         nextRazors, (growthCount + 1) % growthRate, nextBeards)
     next.goals = goals.filter(t => next.mine(t) == LAMBDA || next.mine(t) == LIFT)
     if (Lifter.best.score < nextScore + 25 * collected) {
       Lifter.best = next.result
       Lifter.entry = Lifter.best.moveString
-      println(next.move('A').toString)
+      if (verbose) println(next.move('A').toString)
     }
     next
   }
@@ -306,10 +363,13 @@ class State(
   def legalMoves = {
     var list: List[Char] = Nil
     if (outcome == null) {
+      if (razorCount > 0) list = 'S' +: list
       if (passable(mine(rPos + DOWN))) list = 'D' +: list
       if (mine(rPos + RIGHT) == ROCK && mine(rPos + RIGHT * 2) == EMPTY) list = 'R' +: list
+      if (mine(rPos + RIGHT) == HOROCK && mine(rPos + RIGHT * 2) == EMPTY) list = 'R' +: list
       else if (passable(mine(rPos + RIGHT))) list = 'R' +: list
       if (mine(rPos + LEFT ) == ROCK && mine(rPos + LEFT  * 2) == EMPTY) list = 'L' +: list
+      if (mine(rPos + LEFT ) == HOROCK && mine(rPos + LEFT  * 2) == EMPTY) list = 'L' +: list
       else if (passable(mine(rPos + LEFT))) list = 'L' +: list
       if (passable(mine(rPos + UP))) list = 'U' +: list
       if (collected == totalLambdas) {
@@ -337,6 +397,8 @@ object Lifter {
 
     val startingState = State(Source.stdin)
     val base = startingState.base
+
+    if (args.size > 0 && args(0) == "-verbose") verbose = true
 
     if (args.size > 0 && args(0) == "-run") {
       val result = (startingState /: (args.tail :+ "A")) { _ run _ }

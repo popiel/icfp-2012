@@ -140,6 +140,79 @@ class StateSpec extends Spec with ShouldMatchers {
       state.run("LLLLDDRRRRLDRDLRDLRRUL").outcome should equal ("robot drowned")
     }
 
+    it("should grow beards at the expected rate") {
+      val input = """|     .
+                     |     .
+                     |  WL R
+                     |     .
+                     |     \
+                     |
+                     |Growth 2""".stripMargin
+      val output1 = """|########
+                       |#     .#
+                       |# WWW .#
+                       |# WWL R#
+                       |# WWW .#
+                       |#     \#
+                       |########""".stripMargin
+      val output2 = """|########
+                       |#WWWWW.#
+                       |#WWWWW.#
+                       |#WWWLWR#
+                       |#WWWWW.#
+                       |#WWWWW\#
+                       |########""".stripMargin
+      val state = State(Source.fromString(input))
+      state.base.growthRate should equal (2)
+      state.run("WW").mineString should equal (output1)
+      state.run("WWW").mineString should equal (output1)
+      state.run("WWWW").mineString should equal (output2)
+    }
+
+    it("should grow beards on the beard map") {
+      val state = State(Source.fromFile("maps/beard1.map")).run("RDLRRDDDLLLDDRUU")
+      import state.base._
+      growthRate should equal (15)
+      state.mine(state.rPos + RIGHT) should equal (BEARD)
+      state.run("R").rPos should equal (state.rPos)
+    }
+
+    it("should break open horocks") {
+      val state = State(Source.fromFile("maps/horock1.map")).run("RRDDR")
+      import state.base._
+      state.mine(state.rPos + LEFT + DOWN) should equal (LAMBDA)
+    }
+
+    it("stepping should not corrupt map") {
+      val state = State(Source.fromFile("maps/horock1.map"))
+      import state.base._
+      val pos = state.rPos + RIGHT + RIGHT + DOWN + DOWN + DOWN
+      val s2 = state.run("R")
+      val s3 = state.run("RR")
+      val s4 = state.run("RRD")
+      val s5 = state.run("RRDD")
+      val s6 = state.run("RRDDR")
+      state.mine(pos) should equal (EMPTY)
+      s2.mine(pos) should equal (EMPTY)
+      s3.mine(pos) should equal (EMPTY)
+      s4.mine(pos) should equal (EMPTY)
+      s5.mine(pos) should equal (EMPTY)
+      s6.mine(pos) should equal (LAMBDA)
+    }
+
+    it("should allow horocks to be pushed") {
+      val state = State(Source.fromFile("maps/horock1.map")).run("RRDDRDLDDULLDWR")
+      import state.base._
+      state.mine(state.rPos + RIGHT) should equal (HOROCK)
+    }
+
+    it("should do complex things with horocks") {
+      val state = State(Source.fromFile("maps/horock1.map")).run("LDDDDRRRDR")
+      import state.base._
+      state.mine(state.rPos + LEFT) should equal (ROCK)
+      state.mine(state.rPos + LEFT + LEFT + UP + UP) should equal (LAMBDA)
+    }
+
   }
 }
 
